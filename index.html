@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AccessibilityGPT</title>
+    <title>altGPT</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
         body {
@@ -48,36 +48,16 @@
             max-width: 1000px;
             margin: 0 auto;
             padding: 40px 20px;
-            display: flex;
-            gap: 20px;
-            align-items: flex-start;
         }
-        #sidebar {
-            width: 200px;
-            background: #ffffffaa;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            max-height: 600px;
-            overflow-y: auto;
-        }
-        #wcagList {
-            list-style: none;
-            padding-left: 0;
-        }
-        #content {
-            flex: 1;
-        }
-        #auditURL {
+        #pageURL {
             padding: 16px;
             width: 100%;
-            max-width: none;
             border: 1px solid #ccc;
             border-radius: 4px;
             margin-bottom: 20px;
             font-size: 1.1em;
         }
-        #runAudit {
+        #generateAlt {
             padding: 20px 40px;
             font-size: 1.3em;
             background: linear-gradient(to right, #ff7e5f, #feb47b);
@@ -87,21 +67,25 @@
             cursor: pointer;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
-        #runAudit:hover {
+        #generateAlt:hover {
             opacity: 0.9;
         }
-        #sidebar, .results {
+        .results {
             display: none;
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 20px;
+            margin-top: 20px;
         }
         table {
             width: 100%;
             border-collapse: collapse;
-            border-radius: 8px;
-            overflow: hidden;
+            margin-top: 10px;
         }
         th, td {
-            border: none;
-            padding: 12px;
+            border: 1px solid #ccc;
+            padding: 8px;
             text-align: left;
         }
         thead th {
@@ -111,60 +95,34 @@
         tbody tr:nth-child(even) {
             background: #f9f9ff;
         }
-        #auditResults {
-            margin-bottom: 20px;
-            font-style: italic;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        th, td {
-            border: 1px solid #ccc;
-            padding: 8px;
-            text-align: left;
-        }
-        th {
-            background: #f0f4ff;
-        }
-        .results {
-            background: #fff;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            padding: 20px;
-            margin-top: 20px;
-        }
     </style>
 </head>
 <body>
     <nav>
-        <div class="logo">🚀 AccessibilityGPT</div>
+        <div class="logo">🚀 altGPT</div>
     </nav>
     <header>
-        <h1>AccessibilityGPT</h1>
-        <p>Check your website for accessibility issues and get recommendations.</p>
+        <h1>altGPT</h1>
+        <p>Generate ALT text for every image on a page.</p>
     </header>
     <main>
-        <aside id="sidebar">
-            <h3>Select WCAG</h3>
-            <ul id="wcagList"></ul>
-        </aside>
         <div id="content">
             <div class="input-section">
-                <input type="url" id="auditURL" placeholder="https://example.com">
-                <button id="runAudit">Let's rock</button>
+                <input type="url" id="pageURL" placeholder="https://example.com">
+                <button id="generateAlt">Let's rock</button>
             </div>
             <div class="results" aria-live="polite">
-                <div id="auditResults"></div>
+                <div id="statusMsg"></div>
+                <button id="downloadCSV">Download CSV</button>
                 <table id="resultsTable">
                     <thead>
                         <tr>
                             <th>#</th>
+                            <th>Image</th>
                             <th>Selector</th>
-                            <th>WCAG</th>
-                            <th>Issue</th>
-                            <th>Why important</th>
-                            <th>Recommendation</th>
+                            <th>Current ALT</th>
+                            <th>Suggested ALT</th>
+                            <th></th>
                         </tr>
                     </thead>
                     <tbody id="resultsBody"></tbody>
@@ -172,208 +130,119 @@
             </div>
         </div>
     </main>
-
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/axe-core/4.6.1/axe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@xenova/transformers"></script>
     <script>
-        const auditBtn = document.getElementById('runAudit');
-        const auditResults = document.getElementById('auditResults');
-        const auditURL = document.getElementById('auditURL');
+        const generateBtn = document.getElementById('generateAlt');
+        const statusMsg = document.getElementById('statusMsg');
+        const pageURL = document.getElementById('pageURL');
+        const downloadBtn = document.getElementById('downloadCSV');
+        let captioner;
 
-        async function loadLLM() {
-            if (!window.transformers) {
-                await new Promise(resolve => {
-                    const s = document.createElement('script');
-                    s.src = 'https://cdn.jsdelivr.net/npm/@xenova/transformers';
-                    s.onload = resolve;
-                    document.head.appendChild(s);
-                });
-            }
-            if (!window.llm) {
+        async function loadModel() {
+            if (!captioner) {
                 const { pipeline } = window.transformers;
-                window.llm = await pipeline('text-generation', 'Xenova/gpt2');
+                captioner = await pipeline('image-to-text', 'Xenova/vit-gpt2-image-captioning');
             }
         }
 
-        async function getRecommendations(text) {
-            await loadLLM();
-            const prompt = 'You are an accessibility expert. Provide clear recommendations to fix the following issues:\n' + text + '\nRecommendations:';
-            const out = await window.llm(prompt, { max_length: 200, do_sample: false });
-            return out[0].generated_text.replace(prompt, '').trim();
+        async function generateCaption(blob) {
+            await loadModel();
+            const out = await captioner(blob, { max_length: 20 });
+            return out[0].generated_text.trim();
         }
 
-        const wcagOptions = [
-            { id: '1.1.1 Non-text Content', supported: true },
-            { id: '1.2.1 Audio-only and Video-only', supported: true },
-            { id: '1.2.2 Captions (Prerecorded)', supported: true },
-            { id: '2.1.1 Keyboard', supported: true },
-            { id: '2.1.2 No Keyboard Trap', supported: true },
-            { id: '2.2.1 Timing Adjustable', supported: true },
-            { id: '2.2.2 Pause, Stop, Hide', supported: true },
-            { id: '2.2.4 Interruptions', supported: true },
-            { id: '2.4.1 Bypass Blocks', supported: true },
-            { id: '2.4.4 Link Purpose', supported: true },
-            { id: '3.1.1 Language of Page', supported: true },
-            { id: '3.2.1 On Focus', supported: true },
-            { id: '3.2.2 On Input', supported: true },
-            { id: '4.1.1 Parsing', supported: true },
-            { id: '4.1.2 Name, Role, Value', supported: true }
-        ];
-        const wcagMap = {};
-
-        function markSupported(tag) {
-            if (!tag || wcagMap[tag]) return;
-            wcagOptions.push({ id: tag, supported: true });
-            wcagMap[tag] = wcagOptions.length - 1;
+        function makeSelector(el) {
+            let sel = el.tagName.toLowerCase();
+            if (el.id) sel += '#' + el.id;
+            if (el.className) {
+                const cls = el.className.trim().split(/\s+/).join('.');
+                if (cls) sel += '.' + cls;
+            }
+            return sel;
         }
 
-        function renderWCAGOptions() {
-            const list = document.getElementById('wcagList');
-            list.innerHTML = '';
-            wcagOptions.forEach(opt => {
-                const li = document.createElement('li');
-                const cb = document.createElement('input');
-                cb.type = 'checkbox';
-                cb.value = opt.id;
-                li.appendChild(cb);
-                const label = document.createElement('span');
-                label.textContent = ` ${opt.id}`;
-                li.appendChild(label);
-                if (!opt.supported) {
-                    const span = document.createElement('span');
-                    span.textContent = ' (coming soon)';
-                    span.style.fontSize = '0.8em';
-                    span.style.color = '#888';
-                    li.appendChild(span);
-                }
-                list.appendChild(li);
+        function copy(text) {
+            navigator.clipboard.writeText(text);
+        }
+
+        function addRow(index, img, selector, alt, suggestion) {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${index}</td>
+                <td><img src="${img.src}" style="max-width:100px"></td>
+                <td>${selector}</td>
+                <td>${alt}</td>
+                <td class="suggest">${suggestion || ''}</td>
+                <td><button class="copy">Copy</button></td>
+            `;
+            row.querySelector('.copy').addEventListener('click', () => {
+                copy(row.querySelector('.suggest').textContent);
             });
+            return row;
         }
 
-        function filterTable() {
-            const active = Array.from(document.querySelectorAll('#wcagList input:checked')).map(c => c.value);
+        function downloadCSV() {
+            let csv = 'selector,current_alt,suggested_alt\n';
             document.querySelectorAll('#resultsBody tr').forEach(row => {
-                const wcag = row.getAttribute('data-wcag');
-                row.style.display = active.length === 0 || active.includes(wcag) ? '' : 'none';
+                const cells = row.querySelectorAll('td');
+                csv += `${cells[2].textContent.replace(/,/g,' ')},"${cells[3].textContent}","${cells[4].textContent}"\n`;
             });
+            const blob = new Blob([csv], {type:'text/csv'});
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = 'alt_suggestions.csv';
+            link.click();
         }
 
-        document.getElementById('wcagList').addEventListener('change', filterTable);
-        renderWCAGOptions();
+        downloadBtn.addEventListener('click', downloadCSV);
 
-        async function displayResults(violations) {
+        generateBtn.addEventListener('click', async () => {
+            const url = pageURL.value.trim();
+            if (!url) {
+                statusMsg.textContent = 'Please enter a URL.';
+                return;
+            }
+            statusMsg.textContent = 'Fetching page...';
+            downloadBtn.style.display = 'none';
+            document.querySelector('.results').style.display = 'block';
             const tbody = document.getElementById('resultsBody');
             tbody.innerHTML = '';
-            for (let i = 0; i < violations.length; i++) {
-                const v = violations[i];
-                const wcag = (v.tags || []).find(t => t.startsWith('wcag')) || 'N/A';
-                markSupported(wcag);
-
-                const row = document.createElement('tr');
-                row.setAttribute('data-wcag', wcag);
-
-                const selector = v.nodes.map(n => n.target.join(' ')).join('; ');
-
-                row.innerHTML = `
-                    <td>${i + 1}</td>
-                    <td>${selector}</td>
-                    <td>${wcag}</td>
-                    <td>${v.description}</td>
-                    <td>${v.impact || ''}</td>
-                    <td>Generating...</td>
-                `;
-                tbody.appendChild(row);
-
-                const recCell = row.lastElementChild;
-                try {
-                    const rec = await getRecommendations(v.description);
-                    recCell.textContent = rec;
-                } catch (e) {
-                    recCell.textContent = 'Failed to generate';
+            try {
+                let resp = await fetch(url);
+                if (!resp.ok) {
+                    resp = await fetch('https://cors.isomorphic-git.org/' + url);
                 }
-            }
-            renderWCAGOptions();
-            filterTable();
-        }
-
-        if (auditBtn) {
-            auditBtn.addEventListener('click', async () => {
-                const url = auditURL.value.trim();
-                if (!url) {
-                    auditResults.textContent = 'Please enter a URL.';
-                    return;
-                }
-                document.getElementById('sidebar').style.display = 'block';
-                document.querySelector('.results').style.display = 'block';
-                let secs = 0;
-                auditResults.textContent = 'Fetching page and running audit... (0s)';
-                const interval = setInterval(() => {
-                    secs++;
-                    auditResults.textContent = `Working... ${secs}s - sorry, our AI isn't so fast`;
-                }, 1000);
-                const timeout = setTimeout(() => {
-                    if (document.querySelectorAll('#resultsBody tr').length === 0) {
-                        const tbody = document.getElementById('resultsBody');
-                        tbody.innerHTML = '';
-                        const fake = [
-                            {selector: 'body', wcag: '2.4.4', desc: 'Link purpose unclear', impact: 'moderate', rec: 'Add descriptive text'},
-                            {selector: 'img', wcag: '1.1.1', desc: 'Image missing alt text', impact: 'serious', rec: 'Provide alt attribute'},
-                            {selector: 'a', wcag: '2.1.1', desc: 'Keyboard focus issue', impact: 'critical', rec: 'Ensure element is focusable'}
-                        ];
-                        fake.forEach((f,i) => {
-                            const row = document.createElement('tr');
-                            row.innerHTML = `<td>${i+1}</td><td>${f.selector}</td><td>${f.wcag}</td><td>${f.desc}</td><td>${f.impact}</td><td>${f.rec}</td>`;
-                            tbody.appendChild(row);
-                        });
-                        auditResults.textContent = 'This is taking a while. Showing sample results.';
-                        clearInterval(interval);
-                    }
-                }, 10000);
-                try {
-                    let resp;
-                    try {
-                        resp = await fetch(url);
-                        if (!resp.ok) throw new Error('fetch failed');
-                    } catch (err) {
-                        resp = await fetch('https://cors.isomorphic-git.org/' + url);
-                    }
-                    const html = await resp.text();
-                    const iframe = document.createElement('iframe');
-                    iframe.style.display = 'none';
-                    document.body.appendChild(iframe);
-                    iframe.srcdoc = html;
-                    iframe.onload = async () => {
-                        if (window.axe) {
-                            axe.run(iframe.contentDocument, {}, async (err, results) => {
-                                if (err) {
-                                    auditResults.textContent = 'Error running audit.';
-                                    document.body.removeChild(iframe);
-                                    return;
-                                }
-                                const report = results.violations.length ?
-                                    results.violations.map(v => v.id + ': ' + v.description).join('\n') :
-                                    'No accessibility violations found!';
-                                auditResults.textContent = report;
-                                document.body.removeChild(iframe);
-                                clearInterval(interval);
-                                clearTimeout(timeout);
-                                if (results.violations.length) {
-                                    await displayResults(results.violations);
-                                }
-                            });
-                        } else {
-                            auditResults.textContent = 'axe-core failed to load.';
-                            document.body.removeChild(iframe);
-                            clearInterval(interval);
-                            clearTimeout(timeout);
+                const html = await resp.text();
+                const iframe = document.createElement('iframe');
+                iframe.style.display = 'none';
+                document.body.appendChild(iframe);
+                iframe.srcdoc = html;
+                iframe.onload = async () => {
+                    const imgs = iframe.contentDocument.querySelectorAll('img');
+                    statusMsg.textContent = `Found ${imgs.length} images`;
+                    let i = 1;
+                    for (const img of imgs) {
+                        const alt = img.getAttribute('alt') || '';
+                        const selector = makeSelector(img);
+                        const row = addRow(i++, img, selector, alt, alt ? alt : 'Generating...');
+                        tbody.appendChild(row);
+                        if (!alt) {
+                            try {
+                                const b = await fetch(img.src).then(r => r.blob());
+                                const caption = await generateCaption(b);
+                                row.querySelector('.suggest').textContent = caption;
+                            } catch (e) {
+                                row.querySelector('.suggest').textContent = 'Failed';
+                            }
                         }
-                    };
-                } catch (e) {
-                    auditResults.textContent = 'Failed to fetch page for audit.';
-                    clearInterval(interval);
-                    clearTimeout(timeout);
-                }
-            });
-        }
+                    }
+                    document.body.removeChild(iframe);
+                    if (imgs.length) downloadBtn.style.display = 'inline-block';
+                };
+            } catch (e) {
+                statusMsg.textContent = 'Failed to fetch page.';
+            }
+        });
     </script>
 </body>
 </html>
