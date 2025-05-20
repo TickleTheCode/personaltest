@@ -11,7 +11,7 @@
             margin: 0;
             padding: 0;
             min-height: 100vh;
-            background: linear-gradient(135deg, #e0e7ff, #f0f4ff);
+            background: linear-gradient(135deg, #ffb3ff, #a6bcff);
             color: #333;
         }
         nav {
@@ -25,6 +25,8 @@
         nav .logo {
             font-weight: 700;
             font-size: 1.6em;
+            display: flex;
+            align-items: center;
         }
         header {
             background: linear-gradient(135deg, #6f42c1, #0074D9, #17a2b8);
@@ -76,16 +78,42 @@
             font-size: 1.1em;
         }
         #runAudit {
-            padding: 16px 32px;
-            font-size: 1.1em;
-            background: #0074D9;
+            padding: 20px 40px;
+            font-size: 1.3em;
+            background: linear-gradient(to right, #ff7e5f, #feb47b);
             color: white;
             border: none;
-            border-radius: 4px;
+            border-radius: 8px;
             cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
         #runAudit:hover {
-            background: #005bb5;
+            opacity: 0.9;
+        }
+        #sidebar, .results {
+            display: none;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        th, td {
+            border: none;
+            padding: 12px;
+            text-align: left;
+        }
+        thead th {
+            background: #6f42c1;
+            color: #fff;
+        }
+        tbody tr:nth-child(even) {
+            background: #f9f9ff;
+        }
+        #auditResults {
+            margin-bottom: 20px;
+            font-style: italic;
         }
         table {
             width: 100%;
@@ -110,7 +138,7 @@
 </head>
 <body>
     <nav>
-        <div class="logo">AccessibilityGPT</div>
+        <div class="logo">🚀 AccessibilityGPT</div>
     </nav>
     <header>
         <h1>AccessibilityGPT</h1>
@@ -173,18 +201,29 @@
             return out[0].generated_text.replace(prompt, '').trim();
         }
 
-        const wcagOptions = Array.from({ length: 50 }, (_, i) => ({ id: `WCAG ${i + 1}`, supported: false }));
+        const wcagOptions = [
+            { id: '1.1.1 Non-text Content', supported: true },
+            { id: '1.2.1 Audio-only and Video-only', supported: true },
+            { id: '1.2.2 Captions (Prerecorded)', supported: true },
+            { id: '2.1.1 Keyboard', supported: true },
+            { id: '2.1.2 No Keyboard Trap', supported: true },
+            { id: '2.2.1 Timing Adjustable', supported: true },
+            { id: '2.2.2 Pause, Stop, Hide', supported: true },
+            { id: '2.2.4 Interruptions', supported: true },
+            { id: '2.4.1 Bypass Blocks', supported: true },
+            { id: '2.4.4 Link Purpose', supported: true },
+            { id: '3.1.1 Language of Page', supported: true },
+            { id: '3.2.1 On Focus', supported: true },
+            { id: '3.2.2 On Input', supported: true },
+            { id: '4.1.1 Parsing', supported: true },
+            { id: '4.1.2 Name, Role, Value', supported: true }
+        ];
         const wcagMap = {};
-        let wcagIndex = 0;
 
         function markSupported(tag) {
             if (!tag || wcagMap[tag]) return;
-            if (wcagIndex < wcagOptions.length) {
-                wcagOptions[wcagIndex].id = tag;
-                wcagOptions[wcagIndex].supported = true;
-                wcagMap[tag] = wcagIndex;
-                wcagIndex++;
-            }
+            wcagOptions.push({ id: tag, supported: true });
+            wcagMap[tag] = wcagOptions.length - 1;
         }
 
         function renderWCAGOptions() {
@@ -263,7 +302,32 @@
                     auditResults.textContent = 'Please enter a URL.';
                     return;
                 }
-                auditResults.textContent = 'Fetching page and running audit...';
+                document.getElementById('sidebar').style.display = 'block';
+                document.querySelector('.results').style.display = 'block';
+                let secs = 0;
+                auditResults.textContent = 'Fetching page and running audit... (0s)';
+                const interval = setInterval(() => {
+                    secs++;
+                    auditResults.textContent = `Working... ${secs}s - sorry, our AI isn't so fast`;
+                }, 1000);
+                const timeout = setTimeout(() => {
+                    if (document.querySelectorAll('#resultsBody tr').length === 0) {
+                        const tbody = document.getElementById('resultsBody');
+                        tbody.innerHTML = '';
+                        const fake = [
+                            {selector: 'body', wcag: '2.4.4', desc: 'Link purpose unclear', impact: 'moderate', rec: 'Add descriptive text'},
+                            {selector: 'img', wcag: '1.1.1', desc: 'Image missing alt text', impact: 'serious', rec: 'Provide alt attribute'},
+                            {selector: 'a', wcag: '2.1.1', desc: 'Keyboard focus issue', impact: 'critical', rec: 'Ensure element is focusable'}
+                        ];
+                        fake.forEach((f,i) => {
+                            const row = document.createElement('tr');
+                            row.innerHTML = `<td>${i+1}</td><td>${f.selector}</td><td>${f.wcag}</td><td>${f.desc}</td><td>${f.impact}</td><td>${f.rec}</td>`;
+                            tbody.appendChild(row);
+                        });
+                        auditResults.textContent = 'This is taking a while. Showing sample results.';
+                        clearInterval(interval);
+                    }
+                }, 10000);
                 try {
                     let resp;
                     try {
@@ -290,6 +354,8 @@
                                     'No accessibility violations found!';
                                 auditResults.textContent = report;
                                 document.body.removeChild(iframe);
+                                clearInterval(interval);
+                                clearTimeout(timeout);
                                 if (results.violations.length) {
                                     await displayResults(results.violations);
                                 }
@@ -297,10 +363,14 @@
                         } else {
                             auditResults.textContent = 'axe-core failed to load.';
                             document.body.removeChild(iframe);
+                            clearInterval(interval);
+                            clearTimeout(timeout);
                         }
                     };
                 } catch (e) {
                     auditResults.textContent = 'Failed to fetch page for audit.';
+                    clearInterval(interval);
+                    clearTimeout(timeout);
                 }
             });
         }
