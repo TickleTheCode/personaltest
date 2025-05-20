@@ -5,11 +5,73 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PDF Accessibility Remediation</title>
     <style>
-        body { font-family: Arial, sans-serif; margin: 0; padding: 0; line-height: 1.6; }
-        header { background: #0074D9; color: white; padding: 20px; text-align: center; }
-        section { padding: 20px; }
-        .cta { text-align: center; margin-top: 20px; }
-        .cta a { background: #0074D9; color: white; padding: 10px 20px; text-decoration: none; }
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            line-height: 1.6;
+            background: #f4f7f8;
+        }
+        header {
+            background: linear-gradient(135deg, #0074D9, #6610f2);
+            color: white;
+            padding: 60px 20px;
+            text-align: center;
+        }
+        h1 {
+            margin-top: 0;
+            font-size: 2.5em;
+        }
+        section {
+            padding: 40px 20px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .features {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            justify-content: center;
+            margin: 30px 0;
+        }
+        .feature {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 20px;
+            width: 250px;
+        }
+        .cta {
+            text-align: center;
+            margin-top: 40px;
+        }
+        .waitlist-form {
+            margin-top: 20px;
+        }
+        input[type="email"] {
+            padding: 10px;
+            width: 70%;
+            max-width: 300px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        button {
+            padding: 10px 20px;
+            margin-left: 10px;
+            background: #0074D9;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #005bb5;
+        }
+        #message {
+            margin-top: 15px;
+            color: green;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
@@ -20,18 +82,38 @@
     <section>
         <h2>Why Accessible PDFs?</h2>
         <p>Accessible PDFs ensure that people using assistive technologies can read and navigate your content without barriers.</p>
-        <ul>
-            <li>Compliant with accessibility standards</li>
-            <li>Improved usability for all readers</li>
-            <li>Better search engine optimization</li>
-        </ul>
+        <div class="features">
+            <div class="feature">Compliant with accessibility standards</div>
+            <div class="feature">Improved usability for all readers</div>
+            <div class="feature">Better search engine optimization</div>
+        </div>
     </section>
+
     <section>
         <h2>Our Remediation Services</h2>
         <p>We audit, remediate, and verify your PDF files to meet accessibility guidelines such as WCAG and PDF/UA.</p>
     </section>
+
     <div class="cta">
         <a href="mailto:contact@example.com">Get Started</a>
+        <form class="waitlist-form" id="waitlistForm">
+            <input type="email" id="email" placeholder="Enter your email" required>
+            <button type="submit">Join Waitlist</button>
+        </form>
+        <div id="message" aria-live="polite"></div>
     </div>
+
+    <script>
+        const form = document.getElementById('waitlistForm');
+        const message = document.getElementById('message');
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const email = document.getElementById('email').value;
+            if (email) {
+                message.textContent = 'Thanks for joining the waitlist!';
+                form.reset();
+            }
+        });
+    </script>
 </body>
 </html>
