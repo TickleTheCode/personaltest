@@ -43,28 +43,61 @@
             margin-top: 10px;
         }
         main {
-            max-width: 800px;
+            max-width: 1000px;
             margin: 0 auto;
             padding: 40px 20px;
+            display: flex;
+            gap: 20px;
+            align-items: flex-start;
+        }
+        #sidebar {
+            width: 200px;
+            background: #ffffffaa;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            max-height: 600px;
+            overflow-y: auto;
+        }
+        #wcagList {
+            list-style: none;
+            padding-left: 0;
+        }
+        #content {
+            flex: 1;
         }
         #auditURL {
-            padding: 12px;
-            width: 70%;
-            max-width: 400px;
+            padding: 16px;
+            width: 100%;
+            max-width: none;
             border: 1px solid #ccc;
             border-radius: 4px;
-            margin-right: 10px;
+            margin-bottom: 20px;
+            font-size: 1.1em;
         }
-        button {
-            padding: 12px 20px;
+        #runAudit {
+            padding: 16px 32px;
+            font-size: 1.1em;
             background: #0074D9;
             color: white;
             border: none;
             border-radius: 4px;
             cursor: pointer;
         }
-        button:hover {
+        #runAudit:hover {
             background: #005bb5;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            border: 1px solid #ccc;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background: #f0f4ff;
         }
         .results {
             background: #fff;
@@ -72,7 +105,6 @@
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             padding: 20px;
             margin-top: 20px;
-            white-space: pre-wrap;
         }
     </style>
 </head>
@@ -85,19 +117,38 @@
         <p>Check your website for accessibility issues and get recommendations.</p>
     </header>
     <main>
-        <div>
-            <input type="url" id="auditURL" placeholder="https://example.com">
-            <button id="runAudit">Analyze</button>
+        <aside id="sidebar">
+            <h3>Select WCAG</h3>
+            <ul id="wcagList"></ul>
+        </aside>
+        <div id="content">
+            <div class="input-section">
+                <input type="url" id="auditURL" placeholder="https://example.com">
+                <button id="runAudit">Let's rock</button>
+            </div>
+            <div class="results" aria-live="polite">
+                <div id="auditResults"></div>
+                <table id="resultsTable">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Selector</th>
+                            <th>WCAG</th>
+                            <th>Issue</th>
+                            <th>Why important</th>
+                            <th>Recommendation</th>
+                        </tr>
+                    </thead>
+                    <tbody id="resultsBody"></tbody>
+                </table>
+            </div>
         </div>
-        <div class="results" id="auditResults" aria-live="polite"></div>
-        <div class="results" id="recommendations" aria-live="polite"></div>
     </main>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/axe-core/4.6.1/axe.min.js"></script>
     <script>
         const auditBtn = document.getElementById('runAudit');
         const auditResults = document.getElementById('auditResults');
-        const recommendations = document.getElementById('recommendations');
         const auditURL = document.getElementById('auditURL');
 
         async function loadLLM() {
@@ -122,6 +173,89 @@
             return out[0].generated_text.replace(prompt, '').trim();
         }
 
+        const wcagOptions = Array.from({ length: 50 }, (_, i) => ({ id: `WCAG ${i + 1}`, supported: false }));
+        const wcagMap = {};
+        let wcagIndex = 0;
+
+        function markSupported(tag) {
+            if (!tag || wcagMap[tag]) return;
+            if (wcagIndex < wcagOptions.length) {
+                wcagOptions[wcagIndex].id = tag;
+                wcagOptions[wcagIndex].supported = true;
+                wcagMap[tag] = wcagIndex;
+                wcagIndex++;
+            }
+        }
+
+        function renderWCAGOptions() {
+            const list = document.getElementById('wcagList');
+            list.innerHTML = '';
+            wcagOptions.forEach(opt => {
+                const li = document.createElement('li');
+                const cb = document.createElement('input');
+                cb.type = 'checkbox';
+                cb.value = opt.id;
+                li.appendChild(cb);
+                const label = document.createElement('span');
+                label.textContent = ` ${opt.id}`;
+                li.appendChild(label);
+                if (!opt.supported) {
+                    const span = document.createElement('span');
+                    span.textContent = ' (coming soon)';
+                    span.style.fontSize = '0.8em';
+                    span.style.color = '#888';
+                    li.appendChild(span);
+                }
+                list.appendChild(li);
+            });
+        }
+
+        function filterTable() {
+            const active = Array.from(document.querySelectorAll('#wcagList input:checked')).map(c => c.value);
+            document.querySelectorAll('#resultsBody tr').forEach(row => {
+                const wcag = row.getAttribute('data-wcag');
+                row.style.display = active.length === 0 || active.includes(wcag) ? '' : 'none';
+            });
+        }
+
+        document.getElementById('wcagList').addEventListener('change', filterTable);
+        renderWCAGOptions();
+
+        async function displayResults(violations) {
+            const tbody = document.getElementById('resultsBody');
+            tbody.innerHTML = '';
+            for (let i = 0; i < violations.length; i++) {
+                const v = violations[i];
+                const wcag = (v.tags || []).find(t => t.startsWith('wcag')) || 'N/A';
+                markSupported(wcag);
+
+                const row = document.createElement('tr');
+                row.setAttribute('data-wcag', wcag);
+
+                const selector = v.nodes.map(n => n.target.join(' ')).join('; ');
+
+                row.innerHTML = `
+                    <td>${i + 1}</td>
+                    <td>${selector}</td>
+                    <td>${wcag}</td>
+                    <td>${v.description}</td>
+                    <td>${v.impact || ''}</td>
+                    <td>Generating...</td>
+                `;
+                tbody.appendChild(row);
+
+                const recCell = row.lastElementChild;
+                try {
+                    const rec = await getRecommendations(v.description);
+                    recCell.textContent = rec;
+                } catch (e) {
+                    recCell.textContent = 'Failed to generate';
+                }
+            }
+            renderWCAGOptions();
+            filterTable();
+        }
+
         if (auditBtn) {
             auditBtn.addEventListener('click', async () => {
                 const url = auditURL.value.trim();
@@ -130,7 +264,6 @@
                     return;
                 }
                 auditResults.textContent = 'Fetching page and running audit...';
-                recommendations.textContent = '';
                 try {
                     let resp;
                     try {
@@ -158,13 +291,7 @@
                                 auditResults.textContent = report;
                                 document.body.removeChild(iframe);
                                 if (results.violations.length) {
-                                    recommendations.textContent = 'Generating recommendations... (this may take a moment)';
-                                    try {
-                                        const recs = await getRecommendations(report);
-                                        recommendations.textContent = recs;
-                                    } catch (e) {
-                                        recommendations.textContent = 'Failed to generate recommendations.';
-                                    }
+                                    await displayResults(results.violations);
                                 }
                             });
                         } else {
