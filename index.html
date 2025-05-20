@@ -3,29 +3,76 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PDF Accessibility Remediation</title>
+    <title>AccessibilityGPT - PDF Accessibility Remediation</title>
     <style>
         body {
-            font-family: Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             margin: 0;
             padding: 0;
             line-height: 1.6;
             background: #f4f7f8;
+            color: #333;
+        }
+        nav {
+            background: #fff;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 20px;
+        }
+        nav .logo {
+            font-weight: bold;
+            font-size: 1.4em;
+        }
+        nav ul {
+            list-style: none;
+            display: flex;
+            margin: 0;
+            padding: 0;
+        }
+        nav li {
+            margin-left: 20px;
+        }
+        nav a {
+            text-decoration: none;
+            color: #333;
         }
         header {
             background: linear-gradient(135deg, #0074D9, #6610f2);
             color: white;
-            padding: 60px 20px;
+            padding: 80px 20px;
             text-align: center;
         }
-        h1 {
-            margin-top: 0;
-            font-size: 2.5em;
+        header h1 {
+            margin: 0;
+            font-size: 3em;
+            font-weight: 600;
+        }
+        header p {
+            font-size: 1.2em;
+            margin: 10px 0 30px;
+        }
+        .cta-button {
+            background: #fff;
+            color: #0074D9;
+            padding: 12px 30px;
+            border-radius: 6px;
+            text-decoration: none;
+            font-weight: bold;
+        }
+        .cta-button:hover {
+            background: #e6e6e6;
         }
         section {
-            padding: 40px 20px;
+            padding: 60px 20px;
             max-width: 800px;
             margin: 0 auto;
+        }
+        h2 {
+            font-size: 1.8em;
+            margin-bottom: 20px;
+            text-align: center;
         }
         .features {
             display: flex;
@@ -40,6 +87,7 @@
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             padding: 20px;
             width: 250px;
+            text-align: center;
         }
         .cta {
             text-align: center;
@@ -49,14 +97,14 @@
             margin-top: 20px;
         }
         input[type="email"] {
-            padding: 10px;
+            padding: 12px;
             width: 70%;
             max-width: 300px;
             border: 1px solid #ccc;
             border-radius: 4px;
         }
         button {
-            padding: 10px 20px;
+            padding: 12px 20px;
             margin-left: 10px;
             background: #0074D9;
             color: white;
@@ -80,7 +128,17 @@
             margin-top: 20px;
         }
         .contrast-checker input[type="text"] {
-            width: 100px;
+            width: 120px;
+            margin-right: 10px;
+            padding: 8px;
+            font-size: 1em;
+        }
+        #auditURL {
+            padding: 8px;
+            width: 70%;
+            max-width: 300px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
             margin-right: 10px;
         }
         #auditResults {
@@ -93,9 +151,18 @@
     </style>
 </head>
 <body>
-    <header>
-        <h1>PDF Accessibility Remediation</h1>
+    <nav>
+        <div class="logo">AccessibilityGPT</div>
+        <ul>
+            <li><a href="#home">Home</a></li>
+            <li><a href="#tools">Tools</a></li>
+            <li><a href="#pricing">Pricing</a></li>
+        </ul>
+    </nav>
+    <header id="home">
+        <h1>AccessibilityGPT</h1>
         <p>Make your documents usable for everyone</p>
+        <a href="#pricing" class="cta-button">Upgrade Now</a>
     </header>
     <section>
         <h2>Why Accessible PDFs?</h2>
@@ -112,8 +179,8 @@
         <p>We audit, remediate, and verify your PDF files to meet accessibility guidelines such as WCAG and PDF/UA.</p>
     </section>
 
-    <div class="cta">
-        <a href="mailto:contact@example.com">Get Started</a>
+    <div class="cta" id="pricing">
+        <a href="mailto:contact@example.com" class="cta-button">Get Started</a>
         <form class="waitlist-form" id="waitlistForm">
             <input type="email" id="email" placeholder="Enter your email" required>
             <button type="submit">Join Waitlist</button>
@@ -121,11 +188,12 @@
         <div id="message" aria-live="polite"></div>
     </div>
 
-    <section>
+    <section id="tools">
         <h2>Free Accessibility Tools</h2>
 
         <div class="tools">
             <h3>Run Accessibility Audit</h3>
+            <input type="url" id="auditURL" placeholder="https://example.com">
             <button id="runAudit">Run Audit</button>
             <div id="auditResults" aria-live="polite"></div>
         </div>
@@ -157,21 +225,41 @@
     <script>
         const auditBtn = document.getElementById('runAudit');
         const auditResults = document.getElementById('auditResults');
+        const auditURL = document.getElementById('auditURL');
         if (auditBtn) {
-            auditBtn.addEventListener('click', () => {
-                auditResults.textContent = 'Running audit...';
-                if (window.axe) {
-                    axe.run(document, {}, (err, results) => {
-                        if (err) {
-                            auditResults.textContent = 'Error running audit';
-                            return;
+            auditBtn.addEventListener('click', async () => {
+                const url = auditURL.value.trim();
+                if (!url) {
+                    auditResults.textContent = 'Please enter a URL.';
+                    return;
+                }
+                auditResults.textContent = 'Fetching page and running audit...';
+                try {
+                    const resp = await fetch(url);
+                    const html = await resp.text();
+                    const iframe = document.createElement('iframe');
+                    iframe.style.display = 'none';
+                    document.body.appendChild(iframe);
+                    iframe.srcdoc = html;
+                    iframe.onload = () => {
+                        if (window.axe) {
+                            axe.run(iframe.contentDocument, {}, (err, results) => {
+                                if (err) {
+                                    auditResults.textContent = 'Error running audit';
+                                    return;
+                                }
+                                auditResults.textContent = results.violations.length ?
+                                    results.violations.map(v => v.id + ': ' + v.description).join('\n') :
+                                    'No accessibility violations found!';
+                                document.body.removeChild(iframe);
+                            });
+                        } else {
+                            auditResults.textContent = 'axe-core failed to load.';
+                            document.body.removeChild(iframe);
                         }
-                        auditResults.textContent = results.violations.length ?
-                            results.violations.map(v => v.id + ': ' + v.description).join('\n') :
-                            'No accessibility violations found!';
-                    });
-                } else {
-                    auditResults.textContent = 'axe-core failed to load.';
+                    };
+                } catch (e) {
+                    auditResults.textContent = 'Failed to fetch page. CORS or network error.';
                 }
             });
         }
