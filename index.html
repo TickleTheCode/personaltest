@@ -72,6 +72,24 @@
             color: green;
             font-weight: bold;
         }
+        .tools {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 20px;
+            margin-top: 20px;
+        }
+        .contrast-checker input[type="text"] {
+            width: 100px;
+            margin-right: 10px;
+        }
+        #auditResults {
+            margin-top: 15px;
+            font-size: 0.9em;
+            line-height: 1.4;
+            max-height: 200px;
+            overflow-y: auto;
+        }
     </style>
 </head>
 <body>
@@ -103,6 +121,26 @@
         <div id="message" aria-live="polite"></div>
     </div>
 
+    <section>
+        <h2>Free Accessibility Tools</h2>
+
+        <div class="tools">
+            <h3>Run Accessibility Audit</h3>
+            <button id="runAudit">Run Audit</button>
+            <div id="auditResults" aria-live="polite"></div>
+        </div>
+
+        <div class="tools contrast-checker">
+            <h3>Color Contrast Checker</h3>
+            <label for="textColor">Text Color:</label>
+            <input type="text" id="textColor" placeholder="#000000">
+            <label for="bgColor">Background Color:</label>
+            <input type="text" id="bgColor" placeholder="#ffffff">
+            <button id="checkContrast">Check</button>
+            <div id="contrastResult" aria-live="polite"></div>
+        </div>
+    </section>
+
     <script>
         const form = document.getElementById('waitlistForm');
         const message = document.getElementById('message');
@@ -114,6 +152,66 @@
                 form.reset();
             }
         });
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/axe-core/4.6.1/axe.min.js"></script>
+    <script>
+        const auditBtn = document.getElementById('runAudit');
+        const auditResults = document.getElementById('auditResults');
+        if (auditBtn) {
+            auditBtn.addEventListener('click', () => {
+                auditResults.textContent = 'Running audit...';
+                if (window.axe) {
+                    axe.run(document, {}, (err, results) => {
+                        if (err) {
+                            auditResults.textContent = 'Error running audit';
+                            return;
+                        }
+                        auditResults.textContent = results.violations.length ?
+                            results.violations.map(v => v.id + ': ' + v.description).join('\n') :
+                            'No accessibility violations found!';
+                    });
+                } else {
+                    auditResults.textContent = 'axe-core failed to load.';
+                }
+            });
+        }
+
+        const textColorInput = document.getElementById('textColor');
+        const bgColorInput = document.getElementById('bgColor');
+        const contrastBtn = document.getElementById('checkContrast');
+        const contrastResult = document.getElementById('contrastResult');
+        function luminance(r, g, b) {
+            const a = [r, g, b].map(v => {
+                v /= 255;
+                return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+            });
+            return a[0] * 0.2126 + a[1] * 0.7152 + a[2] * 0.0722;
+        }
+        function contrast(rgb1, rgb2) {
+            const lum1 = luminance(rgb1[0], rgb1[1], rgb1[2]) + 0.05;
+            const lum2 = luminance(rgb2[0], rgb2[1], rgb2[2]) + 0.05;
+            return lum1 > lum2 ? lum1 / lum2 : lum2 / lum1;
+        }
+        function hexToRgb(hex) {
+            const clean = hex.replace('#', '');
+            if (clean.length !== 6) return null;
+            const r = parseInt(clean.substr(0,2),16);
+            const g = parseInt(clean.substr(2,2),16);
+            const b = parseInt(clean.substr(4,2),16);
+            return [r,g,b];
+        }
+        if (contrastBtn) {
+            contrastBtn.addEventListener('click', () => {
+                const textRgb = hexToRgb(textColorInput.value);
+                const bgRgb = hexToRgb(bgColorInput.value);
+                if (!textRgb || !bgRgb) {
+                    contrastResult.textContent = 'Invalid color values.';
+                    return;
+                }
+                const ratio = contrast(textRgb, bgRgb).toFixed(2);
+                contrastResult.textContent = 'Contrast ratio: ' + ratio + (ratio >= 4.5 ? ' (Pass)' : ' (Fail)');
+            });
+        }
     </script>
 </body>
 </html>
